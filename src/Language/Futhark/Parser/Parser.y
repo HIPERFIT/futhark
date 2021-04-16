@@ -151,6 +151,7 @@ import Futhark.Util.Loc hiding (L) -- Lexer has replacements.
       '->'            { L $$ RIGHT_ARROW }
       ':'             { L $$ COLON }
       ':>'            { L $$ COLON_GT }
+      '?'             { L $$ QUESTION_MARK  }
       for             { L $$ FOR }
       do              { L $$ DO }
       with            { L $$ WITH }
@@ -437,7 +438,12 @@ TypeExp :: { UncheckedTypeExp }
            { let L _ (ID v) = $2 in TEArrow (Just v) $4 $7 (srcspan $1 $>) }
          | TypeExpTerm '->' TypeExp
            { TEArrow Nothing $1 $3 (srcspan $1 $>) }
+         | '?' TypeExpDims '.' TypeExp { TEDim $2 $4 (srcspan $1 $>) }
          | TypeExpTerm %prec typeprec { $1 }
+
+TypeExpDims :: { [Name] }
+         : '[' id ']'             { let L _ (ID v) = $2 in [v] }
+         | '[' id ']' TypeExpDims { let L _ (ID v) = $2 in v : $4 }
 
 TypeExpTerm :: { UncheckedTypeExp }
          : '*' TypeExpTerm

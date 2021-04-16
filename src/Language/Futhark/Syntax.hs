@@ -472,6 +472,7 @@ data TypeExp vn
   | TEApply (TypeExp vn) (TypeArgExp vn) SrcLoc
   | TEArrow (Maybe vn) (TypeExp vn) (TypeExp vn) SrcLoc
   | TESum [(Name, [TypeExp vn])] SrcLoc
+  | TEDim [vn] (TypeExp vn) SrcLoc
   deriving (Show)
 
 deriving instance Eq (TypeExp Name)
@@ -491,6 +492,7 @@ instance Located (TypeExp vn) where
   locOf (TEApply _ _ loc) = locOf loc
   locOf (TEArrow _ _ _ loc) = locOf loc
   locOf (TESum _ loc) = locOf loc
+  locOf (TEDim _ _ loc) = locOf loc
 
 -- | A type argument expression passed to a type constructor.
 data TypeArgExp vn

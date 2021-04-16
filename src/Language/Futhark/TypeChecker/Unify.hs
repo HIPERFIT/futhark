@@ -337,11 +337,13 @@ instantiateEmptyArrayDims ::
   TypeBase (DimDecl VName) als ->
   m (TypeBase (DimDecl VName) als, [VName])
 instantiateEmptyArrayDims tloc desc r =
-  fmap (second snd) . (`runStateT` mempty) . traverseDims onDim
+  fmap (second snd) . (`runStateT` mempty)
+    . (traverseDims roundTwo <=< traverseDims onDim)
   where
     onDim _ PosImmediate (AnyDim v) = inst v
     onDim _ PosParam (AnyDim v) = inst v
     onDim _ _ d = pure d
+
     inst v = do
       (m, ds) <- get
       d <- case v of
@@ -357,6 +359,15 @@ instantiateEmptyArrayDims tloc desc r =
           put (m, d : ds)
           pure d
       pure $ NamedDim $ qualName d
+
+    roundTwo _ _ (AnyDim (Just v)) = maybeReplace v
+    roundTwo _ _ d = pure d
+
+    maybeReplace v = do
+      prev <- gets $ M.lookup v . fst
+      case prev of
+        Just v' -> pure $ NamedDim $ qualName v'
+        Nothing -> pure $ AnyDim $ Just v
 
 -- | Is the given type variable the name of an abstract type or type
 -- parameter, which we cannot substitute?

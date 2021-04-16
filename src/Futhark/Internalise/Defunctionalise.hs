@@ -178,6 +178,8 @@ replaceStaticValSizes globals orig_substs sv =
       TERecord (map (fmap $ onTypeExp substs) ts) loc
     onTypeExp substs (TESum ts loc) =
       TESum (map (fmap $ map $ onTypeExp substs) ts) loc
+    onTypeExp substs (TEDim dims t loc) =
+      TEDim dims (onTypeExp substs t) loc
     onTypeExp _ (TEVar v loc) =
       TEVar v loc
 

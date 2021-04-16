@@ -233,6 +233,8 @@ atPosInTypeExp te pos =
       atPosInTypeExp e1 pos `mplus` atPosInTypeExp e2 pos
     TESum cs _ ->
       msum $ map (`atPosInTypeExp` pos) $ concatMap snd cs
+    TEDim _ t _ ->
+      atPosInTypeExp t pos
   where
     inArg (TypeArgExpDim dim _) = inDim dim
     inArg (TypeArgExpType e2) = atPosInTypeExp e2 pos

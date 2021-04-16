@@ -175,6 +175,8 @@ instance (Eq vn, IsName vn) => Pretty (TypeExp vn) where
     align $ cat $ punctuate (text " |" <> softline) $ map ppConstr cs
     where
       ppConstr (name, fs) = text "#" <> ppr name <+> sep (map ppr fs)
+  ppr (TEDim dims te _) =
+    text "?" <> mconcat (map (brackets . pprName) dims) <> text "." <> ppr te
 
 instance (Eq vn, IsName vn) => Pretty (TypeArgExp vn) where
   ppr (TypeArgExpDim d _) = brackets $ ppr d

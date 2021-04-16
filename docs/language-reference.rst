@@ -104,6 +104,7 @@ Compound Types and Values
        : | `sum_type`
        : | `function_type`
        : | `type_application`
+       : | `existential_size`
 
 Compound types can be constructed based on the primitive types.  The
 Futhark type system is entirely structural, and type abbreviations are
@@ -199,6 +200,13 @@ String literals are supported, but only as syntactic sugar for UTF-8
 encoded arrays of ``u8`` values.  There is no character type in
 Futhark, but character literals are interpreted as integers of the
 corresponding Unicode code point.
+
+.. productionlist::
+   existential_size: "?" ("[" `id` "]")+ "." `type`
+
+An existential size quantifier brings an unknown size into scope
+within a type.  This can be used to encode constraints for statically
+unknowable array sizes.
 
 Declarations
 ------------

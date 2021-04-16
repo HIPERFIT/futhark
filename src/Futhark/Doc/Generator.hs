@@ -634,6 +634,9 @@ typeExpHtml e = case e of
     where
       ppClause (n, ts) = joinBy " " . (ppConstr n :) <$> mapM typeExpHtml ts
       ppConstr name = "#" <> toHtml (nameToString name)
+  TEDim dims t _ -> do
+    t' <- typeExpHtml t
+    pure $ "?" <> mconcat (map (brackets . renderName . baseName) dims) <> "." <> t'
 
 qualNameHtml :: QualName VName -> DocM Html
 qualNameHtml (QualName names vname@(VName name tag)) =

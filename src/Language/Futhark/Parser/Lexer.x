@@ -79,6 +79,7 @@ tokens :-
   "}"                      { tokenC RCURLY }
   ","                      { tokenC COMMA }
   "_"                      { tokenC UNDERSCORE }
+  "?"                      { tokenC QUESTION_MARK }
   "->"                     { tokenC RIGHT_ARROW }
   ":"                      { tokenC COLON }
   ":>"                     { tokenC COLON_GT }
@@ -331,6 +332,7 @@ data Token = ID Name
            | COMMA
            | UNDERSCORE
            | RIGHT_ARROW
+           | QUESTION_MARK
 
            | EQU
            | ASTERISK

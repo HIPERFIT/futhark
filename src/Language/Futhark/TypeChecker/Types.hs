@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Type checker building blocks that do not involve unification.
 module Language.Futhark.TypeChecker.Types
@@ -274,6 +275,26 @@ checkTypeExp t@(TESum cs loc) = do
       Scalar $ Sum ts_s,
       foldl' max Unlifted ls
     )
+checkTypeExp (TEDim dims t loc) = do
+  bindSpaced (map (Term,) dims) $ do
+    dims' <- mapM (flip (checkName Term) loc) dims
+    bindDims dims' $ do
+      (t', st, l) <- checkTypeExp t
+      return
+        ( TEDim dims' t' loc,
+          boundToAnyDim dims' st,
+          max l SizeLifted
+        )
+  where
+    bindDims [] m = m
+    bindDims (d : ds) m =
+      bindVal d (BoundV [] $ Scalar $ Prim $ Signed Int64) $ bindDims ds m
+
+    boundToAnyDim dims' = first onDim
+      where
+        onDim (NamedDim d)
+          | qualLeaf d `elem` dims' = AnyDim (Just (qualLeaf d))
+        onDim d = d
 
 -- | Check for duplication of names inside a pattern group.  Produces
 -- a description of all names used in the pattern group.
@@ -314,12 +335,15 @@ checkForDuplicateNamesInType ::
   m ()
 checkForDuplicateNamesInType = check mempty
   where
+    bad v loc prev_loc =
+      typeError loc mempty $
+        text "Name" <+> pquote (ppr v)
+          <+> "also bound at"
+          <+> text (locStr prev_loc) <> "."
+
     check seen (TEArrow (Just v) t1 t2 loc)
       | Just prev_loc <- M.lookup v seen =
-        typeError loc mempty $
-          text "Name" <+> pquote (ppr v)
-            <+> "also bound at"
-            <+> text (locStr prev_loc) <> "."
+        bad v loc prev_loc
       | otherwise =
         check seen' t1 >> check seen' t2
       where
@@ -334,6 +358,13 @@ checkForDuplicateNamesInType = check mempty
       check seen t1 >> check seen t2
     check seen (TEApply t1 TypeArgExpDim {} _) =
       check seen t1
+    check seen (TEDim (v : vs) t loc)
+      | Just prev_loc <- M.lookup v seen =
+        bad v loc prev_loc
+      | otherwise =
+        check (M.insert v loc seen) (TEDim vs t loc)
+    check seen (TEDim [] t _) =
+      check seen t
     check _ TEArray {} = return ()
     check _ TEVar {} = return ()
 

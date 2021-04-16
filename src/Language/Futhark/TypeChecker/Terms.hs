@@ -1261,7 +1261,7 @@ unscopeType ::
   PatternType ->
   TermTypeM (PatternType, [VName])
 unscopeType tloc unscoped t = do
-  (t', m) <- runStateT (traverseDims onDim t) mempty
+  (t', m) <- runStateT (traverseDims roundTwo =<< traverseDims onDim t) mempty
   return (t' `addAliases` S.map unAlias, M.elems m)
   where
     onDim _ p (NamedDim d)
@@ -1279,6 +1279,13 @@ unscopeType tloc unscoped t = do
           d' <- lift $ newDimVar tloc (Rigid $ RigidOutOfScope loc d) "d"
           modify $ M.insert d d'
           return $ NamedDim $ qualName d'
+
+    roundTwo _ _ (AnyDim (Just d)) = do
+      prev <- gets $ M.lookup d
+      case prev of
+        Just d' -> return $ NamedDim $ qualName d'
+        _ -> return $ AnyDim $ Just d
+    roundTwo _ _ d = return d
 
     unAlias (AliasBound v) | v `M.member` unscoped = AliasFree v
     unAlias a = a
