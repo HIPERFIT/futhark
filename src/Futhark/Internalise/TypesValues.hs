@@ -1,6 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE Trustworthy #-}
 
 module Futhark.Internalise.TypesValues
   ( -- * Internalising types
@@ -19,8 +17,6 @@ module Futhark.Internalise.TypesValues
   )
 where
 
-import Control.Monad.Reader
-import Control.Monad.State
 import Data.List (delete, find, foldl')
 import qualified Data.Map.Strict as M
 import Data.Maybe
@@ -32,26 +28,11 @@ internaliseUniqueness :: E.Uniqueness -> I.Uniqueness
 internaliseUniqueness E.Nonunique = I.Nonunique
 internaliseUniqueness E.Unique = I.Unique
 
-newtype TypeState = TypeState {typeCounter :: Int}
-
-newtype InternaliseTypeM a
-  = InternaliseTypeM (StateT TypeState InternaliseM a)
-  deriving (Functor, Applicative, Monad, MonadState TypeState)
-
-liftInternaliseM :: InternaliseM a -> InternaliseTypeM a
-liftInternaliseM = InternaliseTypeM . lift
-
-runInternaliseTypeM ::
-  InternaliseTypeM a ->
-  InternaliseM a
-runInternaliseTypeM (InternaliseTypeM m) =
-  evalStateT m $ TypeState 0
-
 internaliseParamTypes ::
   [E.TypeBase (E.DimDecl VName) ()] ->
   InternaliseM [[I.TypeBase Shape Uniqueness]]
 internaliseParamTypes ts =
-  runInternaliseTypeM $ mapM (fmap (map onType) . internaliseTypeM) ts
+  mapM (fmap (map onType) . internaliseTypeM mempty) ts
   where
     onType = fromMaybe bad . hasStaticShape
     bad = error $ "internaliseParamTypes: " ++ pretty ts
@@ -73,11 +54,13 @@ internaliseLoopParamType et ts =
   fixupTypes ts . concat <$> internaliseParamTypes [et]
 
 internaliseReturnType ::
-  E.TypeBase (E.DimDecl VName) () ->
+  E.StructRetType ->
   [TypeBase shape u] ->
   InternaliseM [I.TypeBase ExtShape Uniqueness]
-internaliseReturnType et ts =
-  fixupTypes ts <$> runInternaliseTypeM (internaliseTypeM et)
+internaliseReturnType (E.RetType dims et) ts = do
+  fixupTypes ts <$> internaliseTypeM exts et
+  where
+    exts = M.fromList $ zip dims [0 ..]
 
 internaliseLambdaReturnType ::
   E.TypeBase (E.DimDecl VName) () ->
@@ -89,48 +72,42 @@ internaliseLambdaReturnType et ts =
 -- | As 'internaliseReturnType', but returns components of a top-level
 -- tuple type piecemeal.
 internaliseEntryReturnType ::
-  E.TypeBase (E.DimDecl VName) () ->
+  E.StructRetType ->
   InternaliseM [[I.TypeBase ExtShape Uniqueness]]
-internaliseEntryReturnType et =
-  runInternaliseTypeM . mapM internaliseTypeM $
+internaliseEntryReturnType (E.RetType dims et) =
+  mapM (internaliseTypeM exts) $
     case E.isTupleRecord et of
       Just ets | not $ null ets -> ets
       _ -> [et]
+  where
+    exts = M.fromList $ zip dims [0 ..]
 
 internaliseType ::
   E.TypeBase (E.DimDecl VName) () ->
   InternaliseM [I.TypeBase I.ExtShape Uniqueness]
-internaliseType = runInternaliseTypeM . internaliseTypeM
-
-newId :: InternaliseTypeM Int
-newId = do
-  i <- gets typeCounter
-  modify $ \s -> s {typeCounter = i + 1}
-  return i
+internaliseType = internaliseTypeM mempty
 
 internaliseDim ::
-  E.DimDecl VName ->
-  InternaliseTypeM ExtSize
-internaliseDim d =
-  case d of
-    E.AnyDim _ -> Ext <$> newId
-    E.ConstDim n -> return $ Free $ intConst I.Int64 $ toInteger n
-    E.NamedDim name -> namedDim name
-  where
-    namedDim (E.QualName _ name) = do
-      subst <- liftInternaliseM $ lookupSubst name
-      case subst of
-        Just [v] -> return $ I.Free v
-        _ -> return $ I.Free $ I.Var name
+  M.Map VName Int -> E.DimDecl VName -> InternaliseM ExtSize
+internaliseDim _ (E.ConstDim n) =
+  return $ Free $ intConst I.Int64 $ toInteger n
+internaliseDim exts (E.NamedDim (E.QualName _ name))
+  | Just x <- name `M.lookup` exts = return $ I.Ext x
+  | otherwise = do
+    subst <- lookupSubst name
+    case subst of
+      Just [v] -> return $ I.Free v
+      _ -> return $ I.Free $ I.Var name
 
 internaliseTypeM ::
+  M.Map VName Int ->
   E.StructType ->
-  InternaliseTypeM [I.TypeBase ExtShape Uniqueness]
-internaliseTypeM orig_t =
+  InternaliseM [I.TypeBase ExtShape Uniqueness]
+internaliseTypeM exts orig_t =
   case orig_t of
     E.Array _ u et shape -> do
       dims <- internaliseShape shape
-      ets <- internaliseTypeM $ E.Scalar et
+      ets <- internaliseTypeM exts $ E.Scalar et
       return [I.arrayOf et' (Shape dims) $ internaliseUniqueness u | et' <- ets]
     E.Scalar (E.Prim bt) ->
       return [I.Prim $ internalisePrimType bt]
@@ -139,12 +116,12 @@ internaliseTypeM orig_t =
       -- arrays of unit will lose their sizes.
       | null ets -> return [I.Prim I.Unit]
       | otherwise ->
-        concat <$> mapM (internaliseTypeM . snd) (E.sortFields ets)
+        concat <$> mapM (internaliseTypeM exts . snd) (E.sortFields ets)
     E.Scalar (E.TypeVar _ u tn [E.TypeArgType arr_t _])
       | baseTag (E.typeLeaf tn) <= E.maxIntrinsicTag,
         baseString (E.typeLeaf tn) == "acc" -> do
-        ts <- map (fromDecl . onAccType) <$> internaliseTypeM arr_t
-        acc_param <- liftInternaliseM $ newVName "acc_cert"
+        ts <- map (fromDecl . onAccType) <$> internaliseTypeM exts arr_t
+        acc_param <- newVName "acc_cert"
         let acc_t = Acc acc_param (Shape [arraysSize 0 ts]) (map rowType ts) $ internaliseUniqueness u
         return [acc_t]
     E.Scalar E.TypeVar {} ->
@@ -154,10 +131,10 @@ internaliseTypeM orig_t =
     E.Scalar (E.Sum cs) -> do
       (ts, _) <-
         internaliseConstructors
-          <$> traverse (fmap concat . mapM internaliseTypeM) cs
+          <$> traverse (fmap concat . mapM (internaliseTypeM exts)) cs
       return $ I.Prim (I.IntType I.Int8) : ts
   where
-    internaliseShape = mapM internaliseDim . E.shapeDims
+    internaliseShape = mapM (internaliseDim exts) . E.shapeDims
 
     onAccType = fromMaybe bad . hasStaticShape
     bad = error $ "internaliseTypeM Acc: " ++ pretty orig_t
@@ -194,9 +171,8 @@ internaliseSumType ::
       M.Map Name (Int, [Int])
     )
 internaliseSumType cs =
-  runInternaliseTypeM $
-    internaliseConstructors
-      <$> traverse (fmap concat . mapM internaliseTypeM) cs
+  internaliseConstructors
+    <$> traverse (fmap concat . mapM (internaliseTypeM mempty)) cs
 
 -- | How many core language values are needed to represent one source
 -- language value of the given type?

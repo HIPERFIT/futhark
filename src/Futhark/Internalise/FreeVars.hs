@@ -86,9 +86,9 @@ freeVars expr = case expr of
   AppExp (If e1 e2 e3 _) _ -> freeVars e1 <> freeVars e2 <> freeVars e3
   AppExp (Apply e1 e2 _ _) _ -> freeVars e1 <> freeVars e2
   Negate e _ -> freeVars e
-  Lambda pats e0 _ (Info (_, t)) _ ->
+  Lambda pats e0 _ (Info (_, RetType dims t)) _ ->
     (sizes (foldMap patternDimNames pats) <> freeVars e0 <> sizes (typeDimNames t))
-      `withoutM` foldMap patternVars pats
+      `withoutM` (foldMap patternVars pats <> foldMap size dims)
   OpSection {} -> mempty
   OpSectionLeft _ _ e _ _ _ -> freeVars e
   OpSectionRight _ _ e _ _ _ -> freeVars e

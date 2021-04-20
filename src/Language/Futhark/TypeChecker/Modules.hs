@@ -45,8 +45,9 @@ substituteTypesInEnv substs env =
     }
   where
     subT name (TypeAbbr l _ _)
-      | Just (Subst ps t) <- substs name = TypeAbbr l ps t
-    subT _ (TypeAbbr l ps t) = TypeAbbr l ps $ applySubst substs t
+      | Just (Subst ps rt) <- substs name = TypeAbbr l ps rt
+    subT _ (TypeAbbr l ps (RetType dims t)) =
+      TypeAbbr l ps $ RetType dims $ applySubst substs t
 
 substituteTypesInBoundV :: TypeSubs -> BoundV -> BoundV
 substituteTypesInBoundV substs (BoundV tps t) =
@@ -128,8 +129,8 @@ newNamesForMTy orig_mty = do
             (substituteInMod mod)
             (substituteInMTy substs mty)
 
-        substituteInTypeBinding (TypeAbbr l ps t) =
-          TypeAbbr l (map substituteInTypeParam ps) $ substituteInType t
+        substituteInTypeBinding (TypeAbbr l ps (RetType dims t)) =
+          TypeAbbr l (map substituteInTypeParam ps) $ RetType dims $ substituteInType t
 
         substituteInTypeParam (TypeParamDim p loc) =
           TypeParamDim (substitute p) loc
@@ -149,8 +150,8 @@ newNamesForMTy orig_mty = do
           Scalar $ Sum $ (fmap . fmap) substituteInType ts
         substituteInType (Array () u t shape) =
           arrayOf (substituteInType $ Scalar t) (substituteInShape shape) u
-        substituteInType (Scalar (Arrow als v t1 t2)) =
-          Scalar $ Arrow als v (substituteInType t1) (substituteInType t2)
+        substituteInType (Scalar (Arrow als v t1 (RetType dims t2))) =
+          Scalar $ Arrow als v (substituteInType t1) $ RetType dims $ substituteInType t2
 
         substituteInShape (ShapeDecl ds) =
           ShapeDecl $ map substituteInDim ds
@@ -162,8 +163,6 @@ newNamesForMTy orig_mty = do
           TypeArgDim (NamedDim $ QualName (map substitute qs) $ substitute v) loc
         substituteInTypeArg (TypeArgDim (ConstDim x) loc) =
           TypeArgDim (ConstDim x) loc
-        substituteInTypeArg (TypeArgDim (AnyDim v) loc) =
-          TypeArgDim (AnyDim v) loc
         substituteInTypeArg (TypeArgType t loc) =
           TypeArgType (substituteInType t) loc
 
@@ -191,7 +190,7 @@ refineEnv ::
   StructType ->
   TypeM (QualName VName, TySet, Env)
 refineEnv loc tset env tname ps t
-  | Just (tname', TypeAbbr _ cur_ps (Scalar (TypeVar () _ (TypeName qs v) _))) <-
+  | Just (tname', TypeAbbr _ cur_ps (RetType _ (Scalar (TypeVar () _ (TypeName qs v) _)))) <-
       findTypeDef tname (ModEnv env),
     QualName (qualQuals tname') v `M.member` tset =
     if paramsMatch cur_ps ps
@@ -200,7 +199,12 @@ refineEnv loc tset env tname ps t
           ( tname',
             QualName qs v `M.delete` tset,
             substituteTypesInEnv
-              (flip M.lookup $ M.fromList [(qualLeaf tname', Subst cur_ps t), (v, Subst ps t)])
+              ( flip M.lookup $
+                  M.fromList
+                    [ (qualLeaf tname', Subst cur_ps $ RetType [] t),
+                      (v, Subst ps $ RetType [] t)
+                    ]
+              )
               env
           )
       else
@@ -263,7 +267,7 @@ resolveAbsTypes mod_abs mod sig_abs loc = do
               (qualLeaf name)
               (mod_l, ps, t)
           | name_l < SizeLifted,
-            emptyDims t ->
+            not $ null $ retDims t ->
             anonymousSizes
               (map qualLeaf $ M.keys mod_abs)
               (qualLeaf name)
@@ -293,12 +297,6 @@ resolveAbsTypes mod_abs mod sig_abs loc = do
           "Module defines"
             </> indent 2 (ppTypeAbbr abs name mod_t)
             </> "which contains anonymous sizes, but module type requires non-lifted type."
-
-    emptyDims :: StructType -> Bool
-    emptyDims = isNothing . traverseDims onDim
-      where
-        onDim _ PosImmediate (AnyDim _) = Nothing
-        onDim _ _ d = Just d
 
 resolveMTyNames ::
   MTy ->
@@ -361,8 +359,8 @@ mismatchedType ::
   SrcLoc ->
   [VName] ->
   VName ->
-  (Liftedness, [TypeParam], StructType) ->
-  (Liftedness, [TypeParam], StructType) ->
+  (Liftedness, [TypeParam], StructRetType) ->
+  (Liftedness, [TypeParam], StructRetType) ->
   Either TypeError b
 mismatchedType loc abs name spec_t env_t =
   Left $
@@ -372,8 +370,8 @@ mismatchedType loc abs name spec_t env_t =
         </> "but module type requires"
         </> indent 2 (ppTypeAbbr abs name spec_t)
 
-ppTypeAbbr :: [VName] -> VName -> (Liftedness, [TypeParam], StructType) -> Doc
-ppTypeAbbr abs name (l, ps, Scalar (TypeVar () _ tn args))
+ppTypeAbbr :: [VName] -> VName -> (Liftedness, [TypeParam], StructRetType) -> Doc
+ppTypeAbbr abs name (l, ps, (RetType [] (Scalar (TypeVar () _ tn args))))
   | typeLeaf tn `elem` abs,
     map typeParamToArg ps == args =
     "type" <> ppr l <+> pprName name
@@ -400,7 +398,7 @@ matchMTys orig_mty orig_mty_sig =
     orig_mty_sig
   where
     matchMTys' ::
-      M.Map VName (Subst StructType) ->
+      M.Map VName (Subst StructRetType) ->
       MTy ->
       MTy ->
       SrcLoc ->
@@ -431,7 +429,7 @@ matchMTys orig_mty orig_mty_sig =
       return (substs <> abs_name_substs)
 
     matchMods ::
-      M.Map VName (Subst StructType) ->
+      M.Map VName (Subst StructRetType) ->
       Mod ->
       Mod ->
       SrcLoc ->
@@ -464,7 +462,7 @@ matchMTys orig_mty orig_mty_sig =
         return (pmod_substs <> mod_substs <> abs_name_substs)
 
     matchEnvs ::
-      M.Map VName (Subst StructType) ->
+      M.Map VName (Subst StructRetType) ->
       Env ->
       Env ->
       SrcLoc ->
@@ -511,21 +509,21 @@ matchMTys orig_mty orig_mty_sig =
 
     matchTypeAbbr ::
       SrcLoc ->
-      M.Map VName (Subst StructType) ->
+      M.Map VName (Subst StructRetType) ->
       VName ->
       Liftedness ->
       [TypeParam] ->
-      StructType ->
+      StructRetType ->
       VName ->
       Liftedness ->
       [TypeParam] ->
-      StructType ->
+      StructRetType ->
       Either TypeError (VName, VName)
-    matchTypeAbbr loc abs_subst_to_type spec_name spec_l spec_ps spec_t name l ps t = do
+    matchTypeAbbr loc abs_subst_to_type spec_name spec_l spec_ps (RetType spec_t_dims spec_t) name l ps (RetType t_dims t) = do
       -- We have to create substitutions for the type parameters, too.
-      unless (length spec_ps == length ps) $ nomatch spec_t
+      unless (length spec_ps == length ps) $ nomatch $ RetType spec_t_dims spec_t
       param_substs <-
-        mconcat <$> zipWithM (matchTypeParam (nomatch spec_t)) spec_ps ps
+        mconcat <$> zipWithM (matchTypeParam (nomatch (RetType spec_t_dims spec_t))) spec_ps ps
 
       -- Abstract types have a particular restriction to ensure that
       -- if we have a value of an abstract type 't [n]', then there is
@@ -534,18 +532,17 @@ matchMTys orig_mty orig_mty_sig =
         case S.toList (mustBeExplicitInType t) `intersect` map typeParamName ps of
           [] -> return ()
           d : _ ->
-            Left $
-              TypeError loc mempty $
-                "Type"
-                  </> indent 2 (ppTypeAbbr [] name (l, ps, t))
-                  </> textwrap "cannot be made abstract because size parameter"
-                  <+/> pquote (pprName d)
-                  <+/> textwrap "is not used as an array size in the definition."
+            Left . TypeError loc mempty $
+              "Type"
+                </> indent 2 (ppTypeAbbr [] name (l, ps, RetType t_dims t))
+                </> textwrap "cannot be made abstract because size parameter"
+                <+/> pquote (pprName d)
+                <+/> textwrap "is not used as an array size in the definition."
 
       let spec_t' = applySubst (`M.lookup` (param_substs <> abs_subst_to_type)) spec_t
       if spec_t' == t
         then return (spec_name, name)
-        else nomatch spec_t'
+        else nomatch $ RetType spec_t_dims spec_t'
       where
         nomatch spec_t' =
           mismatchedType
@@ -553,13 +550,13 @@ matchMTys orig_mty orig_mty_sig =
             (M.keys abs_subst_to_type)
             spec_name
             (spec_l, spec_ps, spec_t')
-            (l, ps, t)
+            (l, ps, RetType spec_t_dims spec_t)
 
     matchTypeParam _ (TypeParamDim x _) (TypeParamDim y _) =
       pure $ M.singleton x $ SizeSubst $ NamedDim $ qualName y
     matchTypeParam _ (TypeParamType spec_l x _) (TypeParamType l y _)
       | spec_l <= l =
-        pure . M.singleton x . Subst [] $
+        pure . M.singleton x . Subst [] . RetType [] $
           Scalar $ TypeVar () Nonunique (typeName y) []
     matchTypeParam nomatch _ _ =
       nomatch

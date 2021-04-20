@@ -341,7 +341,7 @@ internaliseAppExp desc (E.Range start maybe_second end loc) = do
   return [se]
 internaliseAppExp desc (E.Coerce e (TypeDecl dt (Info et)) loc) = do
   ses <- internaliseExp desc e
-  ts <- internaliseReturnType et =<< mapM subExpType ses
+  ts <- internaliseReturnType (E.RetType [] et) =<< mapM subExpType ses
   dt' <- typeExpForError dt
   forM (zip ses ts) $ \(e', t') -> do
     dims <- arrayDims <$> subExpType e'
@@ -1499,7 +1499,7 @@ bodyExtType (Body _ stms res) =
 internaliseLambda :: InternaliseLambda
 internaliseLambda (E.Parens e _) rowtypes =
   internaliseLambda e rowtypes
-internaliseLambda (E.Lambda params body _ (Info (_, rettype)) _) rowtypes =
+internaliseLambda (E.Lambda params body _ (Info (_, RetType _ rettype)) _) rowtypes =
   bindingLambdaParams params rowtypes $ \params' -> do
     body' <- internaliseBody "lam" body
     rettype' <- internaliseLambdaReturnType rettype =<< bodyExtType body'

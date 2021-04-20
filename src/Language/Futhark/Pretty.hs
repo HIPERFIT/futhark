@@ -97,8 +97,6 @@ instance Pretty PrimValue where
   ppr (FloatValue v) = ppr v
 
 instance IsName vn => Pretty (DimDecl vn) where
-  ppr (AnyDim Nothing) = mempty
-  ppr (AnyDim (Just v)) = text "?" <> pprName v
   ppr (NamedDim v) = ppr v
   ppr (ConstDim n) = ppr n
 
@@ -118,6 +116,12 @@ instance Pretty (ShapeDecl Int64) where
 
 instance Pretty (ShapeDecl Bool) where
   ppr (ShapeDecl ds) = mconcat (map (brackets . ppr) ds)
+
+instance Pretty (ShapeDecl dim) => Pretty (RetTypeBase dim as) where
+  ppr = pprPrec 0
+  pprPrec p (RetType [] t) = pprPrec p t
+  pprPrec _ (RetType dims t) =
+    text "?" <> mconcat (map (brackets . pprName) dims) <> text "." <> ppr t
 
 instance Pretty (ShapeDecl dim) => Pretty (ScalarTypeBase dim as) where
   ppr = pprPrec 0
@@ -434,11 +438,11 @@ instance Pretty Liftedness where
   ppr Lifted = text "^"
 
 instance (Eq vn, IsName vn, Annot f) => Pretty (TypeBindBase f vn) where
-  ppr (TypeBind name l params usertype _ _) =
+  ppr (TypeBind name l params te _ _ _) =
     text "type" <> ppr l <+> pprName name
       <+> spread (map ppr params)
       <+> equals
-      <+> ppr usertype
+      <+> ppr te
 
 instance (Eq vn, IsName vn) => Pretty (TypeParamBase vn) where
   ppr (TypeParamDim name _) = brackets $ pprName name

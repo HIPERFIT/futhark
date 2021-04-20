@@ -8,6 +8,7 @@ import qualified Futhark.IR.Syntax.CoreTests
 import qualified Futhark.Optimise.ReuseAllocations.GreedyColoringTests
 import qualified Futhark.Pkg.SolveTests
 import qualified Language.Futhark.SyntaxTests
+import qualified Language.Futhark.TypeCheckerTests
 import Test.Tasty
 
 allTests :: TestTree
@@ -21,7 +22,8 @@ allTests =
       Futhark.Pkg.SolveTests.tests,
       Futhark.IR.Mem.IxFunTests.tests,
       Futhark.IR.PrimitiveTests.tests,
-      Futhark.Optimise.ReuseAllocations.GreedyColoringTests.tests
+      Futhark.Optimise.ReuseAllocations.GreedyColoringTests.tests,
+      Language.Futhark.TypeCheckerTests.tests
     ]
 
 main :: IO ()

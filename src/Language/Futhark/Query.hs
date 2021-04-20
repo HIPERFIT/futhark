@@ -75,13 +75,7 @@ expDefs e =
   execState (astMap mapper e) extra
   where
     mapper =
-      ASTMapper
-        { mapOnExp = onExp,
-          mapOnName = pure,
-          mapOnQualName = pure,
-          mapOnStructType = pure,
-          mapOnPatternType = pure
-        }
+      identityMapper {mapOnExp = onExp}
     onExp e' = do
       modify (<> expDefs e')
       return e'
@@ -290,13 +284,7 @@ atPosInExp e pos = do
     Right _ -> Nothing
   where
     mapper =
-      ASTMapper
-        { mapOnExp = onExp,
-          mapOnName = pure,
-          mapOnQualName = pure,
-          mapOnStructType = pure,
-          mapOnPatternType = pure
-        }
+      identityMapper {mapOnExp = onExp}
     onExp e' =
       case atPosInExp e' pos of
         Just atpos -> Left atpos
@@ -346,7 +334,7 @@ atPosInValBind vbind pos =
     `mplus` join (atPosInTypeExp <$> valBindRetDecl vbind <*> pure pos)
 
 atPosInTypeBind :: TypeBind -> Pos -> Maybe RawAtPos
-atPosInTypeBind = atPosInTypeExp . declaredType . typeExp
+atPosInTypeBind = atPosInTypeExp . typeExp
 
 atPosInModBind :: ModBind -> Pos -> Maybe RawAtPos
 atPosInModBind (ModBind _ params sig e _ _) pos =

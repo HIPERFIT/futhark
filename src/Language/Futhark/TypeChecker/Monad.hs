@@ -234,7 +234,7 @@ class Monad m => MonadTypeChecker m where
 
   checkQualName :: Namespace -> QualName Name -> SrcLoc -> m (QualName VName)
 
-  lookupType :: SrcLoc -> QualName Name -> m (QualName VName, [TypeParam], StructType, Liftedness)
+  lookupType :: SrcLoc -> QualName Name -> m (QualName VName, [TypeParam], StructRetType, Liftedness)
   lookupMod :: SrcLoc -> QualName Name -> m (QualName VName, Mod)
   lookupVar :: SrcLoc -> QualName Name -> m (QualName VName, PatternType)
 
@@ -296,7 +296,8 @@ instance MonadTypeChecker TypeM where
     (scope, qn'@(QualName qs name)) <- checkQualNameWithEnv Type qn loc
     case M.lookup name $ envTypeTable scope of
       Nothing -> unknownType loc qn
-      Just (TypeAbbr l ps def) -> return (qn', ps, qualifyTypeVars outer_env mempty qs def, l)
+      Just (TypeAbbr l ps (RetType dims def)) ->
+        return (qn', ps, RetType dims $ qualifyTypeVars outer_env mempty qs def, l)
 
   lookupMod loc qn = do
     (scope, qn'@(QualName _ name)) <- checkQualNameWithEnv Term qn loc
@@ -313,10 +314,10 @@ instance MonadTypeChecker TypeM where
         | "_" `isPrefixOf` baseString name -> underscoreUse loc qn
         | otherwise ->
           case getType t of
-            Left {} ->
+            Nothing ->
               typeError loc mempty $
                 "Attempt to use function" <+> pprName name <+> "as value."
-            Right t' ->
+            Just t' ->
               return
                 ( qn',
                   fromStruct $
@@ -325,18 +326,10 @@ instance MonadTypeChecker TypeM where
 
   typeError loc notes s = throwError $ TypeError (srclocOf loc) notes s
 
--- | Extract from a type either a function type comprising a list of
--- parameter types and a return type, or a first-order type.
-getType ::
-  TypeBase dim as ->
-  Either
-    ([(PName, TypeBase dim as)], TypeBase dim as)
-    (TypeBase dim as)
-getType (Scalar (Arrow _ v t1 t2)) =
-  case getType t2 of
-    Left (ps, r) -> Left ((v, t1) : ps, r)
-    Right _ -> Left ([(v, t1)], t2)
-getType t = Right t
+-- | Extract from a type a first-order type.
+getType :: TypeBase dim as -> Maybe (TypeBase dim as)
+getType (Scalar Arrow {}) = Nothing
+getType t = Just t
 
 checkQualNameWithEnv :: Namespace -> QualName Name -> SrcLoc -> TypeM (Env, QualName VName)
 checkQualNameWithEnv space qn@(QualName quals name) loc = do
@@ -387,8 +380,8 @@ qualifyTypeVars outer_env orig_except ref_qs = onType (S.fromList orig_except)
       Record $ M.map (onType except) m
     onScalar except (Sum m) =
       Sum $ M.map (map $ onType except) m
-    onScalar except (Arrow as p t1 t2) =
-      Arrow as p (onType except' t1) (onType except' t2)
+    onScalar except (Arrow as p t1 (RetType dims t2)) =
+      Arrow as p (onType except' t1) $ RetType dims (onType except' t2)
       where
         except' = case p of
           Named p' -> S.insert p' except
@@ -418,7 +411,7 @@ qualifyTypeVars outer_env orig_except ref_qs = onType (S.fromList orig_except)
       name `M.member` envVtable env
         || isJust (find matches $ M.elems (envTypeTable env))
       where
-        matches (TypeAbbr _ _ (Scalar (TypeVar _ _ (TypeName x_qs name') _))) =
+        matches (TypeAbbr _ _ (RetType _ (Scalar (TypeVar _ _ (TypeName x_qs name') _)))) =
           null x_qs && name == name'
         matches _ = False
     reachable (q : qs') name env
