@@ -376,6 +376,8 @@ test-suite unit
       Language.Futhark.CoreTests
       Language.Futhark.SyntaxTests
       Futhark.Optimise.ReuseAllocations.GreedyColoringTests
+      Language.Futhark.TypeCheckerTests
+      Language.Futhark.TypeChecker.TypesTests
       Paths_futhark
   hs-source-dirs:
       unittests

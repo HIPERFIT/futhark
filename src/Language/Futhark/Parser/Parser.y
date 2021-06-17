@@ -151,6 +151,7 @@ import Futhark.Util.Loc hiding (L) -- Lexer has replacements.
       '->'            { L $$ RIGHT_ARROW }
       ':'             { L $$ COLON }
       ':>'            { L $$ COLON_GT }
+      '?'             { L $$ QUESTION_MARK  }
       for             { L $$ FOR }
       do              { L $$ DO }
       with            { L $$ WITH }
@@ -425,19 +426,24 @@ TypeExpDecl :: { TypeDeclBase NoInfo Name }
              : TypeExp %prec bottom { TypeDecl $1 NoInfo }
 
 TypeAbbr :: { TypeBindBase NoInfo Name }
-TypeAbbr : type Liftedness id TypeParams '=' TypeExpDecl
+TypeAbbr : type Liftedness id TypeParams '=' TypeExp
            { let L _ (ID name) = $3
-              in TypeBind name $2 $4 $6 Nothing (srcspan $1 $>) }
-         | type Liftedness 'id[' id ']' TypeParams '=' TypeExpDecl
+              in TypeBind name $2 $4 $6 NoInfo Nothing (srcspan $1 $>) }
+         | type Liftedness 'id[' id ']' TypeParams '=' TypeExp
            { let L loc (INDEXING name) = $3; L ploc (ID pname) = $4
-             in TypeBind name $2 (TypeParamDim pname ploc:$6) $8 Nothing (srcspan $1 $>) }
+             in TypeBind name $2 (TypeParamDim pname ploc:$6) $8 NoInfo Nothing (srcspan $1 $>) }
 
 TypeExp :: { UncheckedTypeExp }
          : '(' id ':' TypeExp ')' '->' TypeExp
            { let L _ (ID v) = $2 in TEArrow (Just v) $4 $7 (srcspan $1 $>) }
          | TypeExpTerm '->' TypeExp
            { TEArrow Nothing $1 $3 (srcspan $1 $>) }
+         | '?' TypeExpDims '.' TypeExp { TEDim $2 $4 (srcspan $1 $>) }
          | TypeExpTerm %prec typeprec { $1 }
+
+TypeExpDims :: { [Name] }
+         : '[' id ']'             { let L _ (ID v) = $2 in [v] }
+         | '[' id ']' TypeExpDims { let L _ (ID v) = $2 in v : $4 }
 
 TypeExpTerm :: { UncheckedTypeExp }
          : '*' TypeExpTerm
@@ -665,11 +671,11 @@ Atom : PrimLit        { Literal (fst $1) (snd $1) }
         { OpSection (qualName (nameFromString "-")) NoInfo (srcspan $1 $>) }
      | '(' Exp2 '-' ')'
        { OpSectionLeft (qualName (nameFromString "-"))
-         NoInfo $2 (NoInfo, NoInfo) (NoInfo, NoInfo) (srcspan $1 $>) }
+         NoInfo $2 (NoInfo, NoInfo) NoInfo (srcspan $1 $>) }
      | '(' BinOp Exp2 ')'
        { OpSectionRight (fst $2) NoInfo $3 (NoInfo, NoInfo) NoInfo (srcspan $1 $>) }
      | '(' Exp2 BinOp ')'
-       { OpSectionLeft (fst $3) NoInfo $2 (NoInfo, NoInfo) (NoInfo, NoInfo) (srcspan $1 $>) }
+       { OpSectionLeft (fst $3) NoInfo $2 (NoInfo, NoInfo) NoInfo (srcspan $1 $>) }
      | '(' BinOp ')'
        { OpSection (fst $2) NoInfo (srcspan $1 $>) }
 

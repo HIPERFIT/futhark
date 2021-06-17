@@ -402,7 +402,7 @@ valBindHtml name (ValBind _ _ retdecl (Info (rettype, _)) tparams params _ _ _ _
         noLink $
           map typeParamName tparams
             ++ map identName (S.toList $ mconcat $ map patternIdents params)
-  rettype' <- noLink' $ maybe (typeHtml rettype) typeExpHtml retdecl
+  rettype' <- noLink' $ maybe (retTypeHtml rettype) typeExpHtml retdecl
   params' <- noLink' $ mapM patternHtml params
   return
     ( keyword "val " <> (H.span ! A.class_ "decl_name") name,
@@ -438,8 +438,8 @@ synopsisType tb = Just $ do
   fullRow <$> typeBindHtml name' tb
 
 typeBindHtml :: Html -> TypeBind -> DocM Html
-typeBindHtml name' (TypeBind _ l tparams t _ _) = do
-  t' <- noLink (map typeParamName tparams) $ typeDeclHtml t
+typeBindHtml name' (TypeBind _ l tparams t _ _ _) = do
+  t' <- noLink (map typeParamName tparams) $ typeExpHtml t
   return $ typeAbbrevHtml l name' tparams <> " = " <> t'
 
 renderEnv :: Env -> DocM Html
@@ -463,7 +463,7 @@ renderValBind = fmap H.div . synopsisValBindBind
 
 renderTypeBind :: (VName, TypeBinding) -> DocM Html
 renderTypeBind (name, TypeAbbr l tps tp) = do
-  tp' <- typeHtml tp
+  tp' <- retTypeHtml tp
   return $ H.div $ typeAbbrevHtml l (vnameHtml name) tps <> " = " <> tp'
 
 synopsisValBindBind :: (VName, BoundV) -> DocM Html
@@ -498,7 +498,7 @@ typeHtml t = case t of
     return $ prettyU u <> et' <> mconcat (map (" " <>) targs')
   Scalar (Arrow _ pname t1 t2) -> do
     t1' <- typeHtml t1
-    t2' <- typeHtml t2
+    t2' <- retTypeHtml t2
     return $ case pname of
       Named v ->
         parens (vnameHtml v <> ": " <> t1') <> " -> " <> t2'
@@ -508,6 +508,12 @@ typeHtml t = case t of
     where
       ppClause (n, ts) = joinBy " " . (ppConstr n :) <$> mapM typeHtml ts
       ppConstr name = "#" <> toHtml (nameToString name)
+
+retTypeHtml :: StructRetType -> DocM Html
+retTypeHtml (RetType [] t) = typeHtml t
+retTypeHtml (RetType dims t) = do
+  t' <- typeHtml t
+  pure $ "?" <> mconcat (map (brackets . vnameHtml) dims) <> "." <> t'
 
 prettyShapeDecl :: ShapeDecl (DimDecl VName) -> DocM Html
 prettyShapeDecl (ShapeDecl ds) =
@@ -634,6 +640,9 @@ typeExpHtml e = case e of
     where
       ppClause (n, ts) = joinBy " " . (ppConstr n :) <$> mapM typeExpHtml ts
       ppConstr name = "#" <> toHtml (nameToString name)
+  TEDim dims t _ -> do
+    t' <- typeExpHtml t
+    pure $ "?" <> mconcat (map (brackets . renderName . baseName) dims) <> "." <> t'
 
 qualNameHtml :: QualName VName -> DocM Html
 qualNameHtml (QualName names vname@(VName name tag)) =
@@ -679,7 +688,6 @@ relativise dest src =
   concat (replicate (length (splitPath src) - 1) "../") ++ dest
 
 dimDeclHtml :: DimDecl VName -> DocM Html
-dimDeclHtml (AnyDim _) = return mempty
 dimDeclHtml (NamedDim v) = qualNameHtml v
 dimDeclHtml (ConstDim n) = return $ toHtml (show n)
 
@@ -827,7 +835,8 @@ describeDec _ ImportDec {} = Nothing
 valBindWhat :: ValBind -> IndexWhat
 valBindWhat vb
   | null (valBindParams vb),
-    orderZero (fst $ unInfo $ valBindRetType vb) =
+    RetType _ t <- fst $ unInfo $ valBindRetType vb,
+    orderZero t =
     IndexValue
   | otherwise =
     IxFun

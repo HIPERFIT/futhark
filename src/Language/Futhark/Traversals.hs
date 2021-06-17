@@ -41,7 +41,9 @@ data ASTMapper m = ASTMapper
     mapOnName :: VName -> m VName,
     mapOnQualName :: QualName VName -> m (QualName VName),
     mapOnStructType :: StructType -> m StructType,
-    mapOnPatternType :: PatternType -> m PatternType
+    mapOnPatternType :: PatternType -> m PatternType,
+    mapOnStructRetType :: StructRetType -> m StructRetType,
+    mapOnPatternRetType :: PatternRetType -> m PatternRetType
   }
 
 -- | An 'ASTMapper' that just leaves its input unchanged.
@@ -52,7 +54,9 @@ identityMapper =
       mapOnName = return,
       mapOnQualName = return,
       mapOnStructType = return,
-      mapOnPatternType = return
+      mapOnPatternType = return,
+      mapOnStructRetType = return,
+      mapOnPatternRetType = return
     }
 
 -- | The class of things that we can map an 'ASTMapper' across.
@@ -80,7 +84,7 @@ instance ASTMappable (AppExpBase Info VName) where
     LetFun <$> mapOnName tv name
       <*> ( (,,,,) <$> mapM (astMap tv) fparams <*> mapM (astMap tv) params
               <*> traverse (astMap tv) ret
-              <*> traverse (mapOnStructType tv) t
+              <*> traverse (mapOnStructRetType tv) t
               <*> mapOnExp tv e
           )
       <*> mapOnExp tv body
@@ -159,13 +163,13 @@ instance ASTMappable (ExpBase Info VName) where
     Lambda <$> mapM (astMap tv) params
       <*> mapOnExp tv body
       <*> traverse (astMap tv) ret
-      <*> traverse (traverse $ mapOnStructType tv) t
+      <*> traverse (traverse $ mapOnStructRetType tv) t
       <*> pure loc
   astMap tv (OpSection name t loc) =
     OpSection <$> mapOnQualName tv name
       <*> traverse (mapOnPatternType tv) t
       <*> pure loc
-  astMap tv (OpSectionLeft name t arg (Info (pa, t1a, argext), Info (pb, t1b)) (t2, retext) loc) =
+  astMap tv (OpSectionLeft name t arg (Info (pa, t1a, argext), Info (pb, t1b)) ret loc) =
     OpSectionLeft <$> mapOnQualName tv name
       <*> traverse (mapOnPatternType tv) t
       <*> mapOnExp tv arg
@@ -173,7 +177,7 @@ instance ASTMappable (ExpBase Info VName) where
               <$> (Info <$> ((pa,,) <$> mapOnStructType tv t1a <*> pure argext))
               <*> (Info <$> ((pb,) <$> mapOnStructType tv t1b))
           )
-      <*> ((,) <$> traverse (mapOnPatternType tv) t2 <*> pure retext)
+      <*> traverse (mapOnPatternRetType tv) ret
       <*> pure loc
   astMap tv (OpSectionRight name t arg (Info (pa, t1a), Info (pb, t1b, argext)) t2 loc) =
     OpSectionRight <$> mapOnQualName tv name
@@ -183,7 +187,7 @@ instance ASTMappable (ExpBase Info VName) where
               <$> (Info <$> ((pa,) <$> mapOnStructType tv t1a))
               <*> (Info <$> ((pb,,) <$> mapOnStructType tv t1b <*> pure argext))
           )
-      <*> traverse (mapOnPatternType tv) t2
+      <*> traverse (mapOnPatternRetType tv) t2
       <*> pure loc
   astMap tv (ProjectSection fields t loc) =
     ProjectSection fields <$> traverse (mapOnPatternType tv) t <*> pure loc
@@ -217,6 +221,8 @@ instance ASTMappable (TypeExp VName) where
     TEArrow v <$> astMap tv t1 <*> astMap tv t2 <*> pure loc
   astMap tv (TESum cs loc) =
     TESum <$> traverse (traverse $ astMap tv) cs <*> pure loc
+  astMap tv (TEDim dims t loc) =
+    TEDim dims <$> astMap tv t <*> pure loc
 
 instance ASTMappable (TypeArgExp VName) where
   astMap tv (TypeArgExpDim dim loc) =
@@ -233,7 +239,6 @@ instance ASTMappable (DimExp VName) where
 instance ASTMappable (DimDecl VName) where
   astMap tv (NamedDim vn) = NamedDim <$> mapOnQualName tv vn
   astMap _ (ConstDim k) = pure $ ConstDim k
-  astMap tv (AnyDim vn) = AnyDim <$> traverse (mapOnName tv) vn
 
 instance ASTMappable (TypeParamBase VName) where
   astMap = traverse . mapOnName
@@ -271,8 +276,9 @@ traverseScalarType _ _ _ (Prim t) = pure $ Prim t
 traverseScalarType f g h (Record fs) = Record <$> traverse (traverseType f g h) fs
 traverseScalarType f g h (TypeVar als u t args) =
   TypeVar <$> h als <*> pure u <*> f t <*> traverse (traverseTypeArg f g) args
-traverseScalarType f g h (Arrow als v t1 t2) =
-  Arrow <$> h als <*> pure v <*> traverseType f g h t1 <*> traverseType f g h t2
+traverseScalarType f g h (Arrow als v t1 (RetType dims t2)) =
+  Arrow <$> h als <*> pure v <*> traverseType f g h t1
+    <*> (RetType dims <$> traverseType f g h t2)
 traverseScalarType f g h (Sum cs) =
   Sum <$> (traverse . traverse) (traverseType f g h) cs
 
@@ -306,6 +312,12 @@ instance ASTMappable PatternType where
   astMap tv = traverseType f (astMap tv) (astMap tv)
     where
       f = fmap typeNameFromQualName . mapOnQualName tv . qualNameFromTypeName
+
+instance ASTMappable StructRetType where
+  astMap tv (RetType ext t) = RetType ext <$> astMap tv t
+
+instance ASTMappable PatternRetType where
+  astMap tv (RetType ext t) = RetType ext <$> astMap tv t
 
 instance ASTMappable (TypeDeclBase Info VName) where
   astMap tv (TypeDecl dt (Info et)) =
@@ -432,7 +444,7 @@ bareExp (Lambda params body ret _ loc) =
   Lambda (map barePat params) (bareExp body) ret NoInfo loc
 bareExp (OpSection name _ loc) = OpSection name NoInfo loc
 bareExp (OpSectionLeft name _ arg _ _ loc) =
-  OpSectionLeft name NoInfo (bareExp arg) (NoInfo, NoInfo) (NoInfo, NoInfo) loc
+  OpSectionLeft name NoInfo (bareExp arg) (NoInfo, NoInfo) NoInfo loc
 bareExp (OpSectionRight name _ arg _ _ loc) =
   OpSectionRight name NoInfo (bareExp arg) (NoInfo, NoInfo) NoInfo loc
 bareExp (ProjectSection fields _ loc) = ProjectSection fields NoInfo loc

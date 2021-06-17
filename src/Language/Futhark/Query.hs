@@ -75,13 +75,7 @@ expDefs e =
   execState (astMap mapper e) extra
   where
     mapper =
-      ASTMapper
-        { mapOnExp = onExp,
-          mapOnName = pure,
-          mapOnQualName = pure,
-          mapOnStructType = pure,
-          mapOnPatternType = pure
-        }
+      identityMapper {mapOnExp = onExp}
     onExp e' = do
       modify (<> expDefs e')
       return e'
@@ -233,6 +227,8 @@ atPosInTypeExp te pos =
       atPosInTypeExp e1 pos `mplus` atPosInTypeExp e2 pos
     TESum cs _ ->
       msum $ map (`atPosInTypeExp` pos) $ concatMap snd cs
+    TEDim _ t _ ->
+      atPosInTypeExp t pos
   where
     inArg (TypeArgExpDim dim _) = inDim dim
     inArg (TypeArgExpType e2) = atPosInTypeExp e2 pos
@@ -288,13 +284,7 @@ atPosInExp e pos = do
     Right _ -> Nothing
   where
     mapper =
-      ASTMapper
-        { mapOnExp = onExp,
-          mapOnName = pure,
-          mapOnQualName = pure,
-          mapOnStructType = pure,
-          mapOnPatternType = pure
-        }
+      identityMapper {mapOnExp = onExp}
     onExp e' =
       case atPosInExp e' pos of
         Just atpos -> Left atpos
@@ -344,7 +334,7 @@ atPosInValBind vbind pos =
     `mplus` join (atPosInTypeExp <$> valBindRetDecl vbind <*> pure pos)
 
 atPosInTypeBind :: TypeBind -> Pos -> Maybe RawAtPos
-atPosInTypeBind = atPosInTypeExp . declaredType . typeExp
+atPosInTypeBind = atPosInTypeExp . typeExp
 
 atPosInModBind :: ModBind -> Pos -> Maybe RawAtPos
 atPosInModBind (ModBind _ params sig e _ _) pos =

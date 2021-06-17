@@ -115,8 +115,10 @@ data MTy = MTy
   }
   deriving (Show)
 
--- | A binding from a name to its definition as a type.
-data TypeBinding = TypeAbbr Liftedness [TypeParam] StructType
+-- | A binding from a name to its definition as a type.  We allow a
+-- return type here to support type abbreviations that hide some inner
+-- sizes (these must necessarily be 'Lifted' or 'SizeLifted').
+data TypeBinding = TypeAbbr Liftedness [TypeParam] StructRetType
   deriving (Eq, Show)
 
 -- | Type parameters, list of parameter types (optinally named), and
