@@ -1,0 +1,1 @@
+node --experimental-wasm-simd $*

@@ -374,6 +374,70 @@ jobs:
     - run: |
         futhark test -C --no-terminal --backend=cuda --exclude=no_opencl tests examples
 
+  test-wasm:
+    runs-on: ubuntu-20.04
+    needs: [build-linux-nix]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: mymindstorm/setup-emsdk@v7
+      with:
+        version: 2.0.18
+        actions-cache-folder: 'emsdk-cache'
+
+    - uses: actions/setup-node@v1
+      with:
+        node-version: '16.x'
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: futhark-nightly-linux-x86_64.tar.xz
+
+    - name: Install from nightly tarball
+      run: |
+        tar xvf futhark-nightly-linux-x86_64.tar.xz
+        make -C futhark-nightly-linux-x86_64/ install PREFIX=$HOME/.local
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Run tests
+      run: |
+        node --version
+        export EMCFLAGS="-sINITIAL_MEMORY=2147418112 -O1" # 2gb - 64kb... largest value of memory
+        futhark test -c --backend=wasm --runner=./tools/node-simd.sh --no-tuning --exclude=no_wasm tests examples
+
+  test-wasm-multicore:
+    runs-on: ubuntu-20.04
+    needs: [build-linux-nix]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: mymindstorm/setup-emsdk@v7
+      with:
+        version: 2.0.18
+        actions-cache-folder: 'emsdk-cache'
+
+    - uses: actions/setup-node@v1
+      with:
+        node-version: '16.x'
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: futhark-nightly-linux-x86_64.tar.xz
+
+    - name: Install from nightly tarball
+      run: |
+        tar xvf futhark-nightly-linux-x86_64.tar.xz
+        make -C futhark-nightly-linux-x86_64/ install PREFIX=$HOME/.local
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Run tests
+      run: |
+        node --version
+        export EMCFLAGS="-sINITIAL_MEMORY=2147418112 -O1 -s PTHREAD_POOL_SIZE=12" # 2gb - 64kb... largest value of memory
+        futhark test -c --backend=wasm-multicore --runner=./tools/node-threaded.sh --no-tuning --exclude=no_wasm tests examples
+
   test-tools:
     runs-on: ubuntu-20.04
     needs: [build-linux-nix]

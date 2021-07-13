@@ -1,5 +1,5 @@
 -- ==
--- tags { no_python }
+-- tags { no_python no_wasm }
 -- input { 100i64 1000i64 } output { 870104 }
 -- compiled input { 400i64 1000i64} output { 985824 }
 -- compiled input { 100000i64 100i64} output { 15799424 }

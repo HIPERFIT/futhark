@@ -31,6 +31,7 @@ the `development blog <https://futhark-lang.org/blog.html>`_.
    usage.rst
    language-reference.rst
    c-api.rst
+   js-api.rst
    package-management.rst
    server-protocol.rst
    c-porting-guide.rst
@@ -54,6 +55,8 @@ the `development blog <https://futhark-lang.org/blog.html>`_.
    man/futhark-pkg.rst
    man/futhark-pyopencl.rst
    man/futhark-python.rst
+   man/futhark-wasm.rst
+   man/futhark-wasm-multicore.rst
    man/futhark-repl.rst
    man/futhark-run.rst
    man/futhark-literate.rst

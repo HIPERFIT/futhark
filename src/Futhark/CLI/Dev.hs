@@ -407,6 +407,8 @@ commandLineOptions =
                 "multicore" -> Right $ MCMemAction compileMulticoreAction
                 "opencl" -> Right $ GPUMemAction compileOpenCLAction
                 "cuda" -> Right $ GPUMemAction compileCUDAAction
+                "wasm" -> Right $ SeqMemAction compileCtoWASMAction
+                "wasm-multicore" -> Right $ MCMemAction compileMulticoreToWASMAction
                 "python" -> Right $ SeqMemAction compilePythonAction
                 "pyopencl" -> Right $ GPUMemAction compilePyOpenCLAction
                 _ -> Left $ error $ "Invalid backend: " <> arg

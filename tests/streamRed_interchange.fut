@@ -5,7 +5,7 @@
 -- This test is inspired by kmeans.
 --
 -- ==
--- tags { no_python }
+-- tags { no_wasm no_python }
 -- input { 3i64 100i64 5i64 }
 -- output { [[0.8051474f32, -7.109213e-2f32, -2.8099937f32],
 --          [2.1506262f32, 2.51387f32, -1.8687513f32],

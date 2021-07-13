@@ -100,6 +100,11 @@ static inline int scheduler_execute_task(struct scheduler *scheduler,
 #include <sys/sysinfo.h>
 #include <sys/resource.h>
 #include <signal.h>
+#elif defined(__EMSCRIPTEN__)
+#include <emscripten/threading.h>
+#include <sys/sysinfo.h>
+#include <sys/resource.h>
+#include <signal.h>
 #endif
 
 /* Multicore Utility functions */
@@ -128,7 +133,7 @@ static inline int getrusage_thread(struct rusage *rusage)
     } else {
         errno = EINVAL;
     }
-#elif defined(__linux__)
+#elif defined(__linux__) || __EMSCRIPTEN__
     err = getrusage(RUSAGE_THREAD, rusage);
 #endif
     return err;
@@ -152,6 +157,8 @@ static int num_processors()
     return ncores;
 #elif defined(__linux__)
   return get_nprocs();
+#elif __EMSCRIPTEN__
+  return emscripten_num_logical_cores();
 #else
   fprintf(stderr, "operating system not recognised\n");
   return -1;

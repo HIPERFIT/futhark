@@ -35,6 +35,7 @@ build-type:     Simple
 extra-source-files:
     rts/c/*.h
     rts/futhark-doc/*.css
+    rts/javascript/*.js
     rts/python/*.py
     prelude/*.fut
 -- Just enough of the docs to build the manpages.
@@ -84,6 +85,7 @@ library
       Futhark.CLI.Literate
       Futhark.CLI.Misc
       Futhark.CLI.Multicore
+      Futhark.CLI.MulticoreWASM
       Futhark.CLI.OpenCL
       Futhark.CLI.Pkg
       Futhark.CLI.PyOpenCL
@@ -92,6 +94,7 @@ library
       Futhark.CLI.REPL
       Futhark.CLI.Run
       Futhark.CLI.Test
+      Futhark.CLI.WASM
       Futhark.CodeGen.Backends.CCUDA
       Futhark.CodeGen.Backends.CCUDA.Boilerplate
       Futhark.CodeGen.Backends.COpenCL
@@ -104,12 +107,15 @@ library
       Futhark.CodeGen.Backends.GenericPython.AST
       Futhark.CodeGen.Backends.GenericPython.Definitions
       Futhark.CodeGen.Backends.GenericPython.Options
+      Futhark.CodeGen.Backends.GenericWASM
       Futhark.CodeGen.Backends.MulticoreC
+      Futhark.CodeGen.Backends.MulticoreWASM
       Futhark.CodeGen.Backends.PyOpenCL
       Futhark.CodeGen.Backends.PyOpenCL.Boilerplate
       Futhark.CodeGen.Backends.SequentialC
       Futhark.CodeGen.Backends.SequentialC.Boilerplate
       Futhark.CodeGen.Backends.SequentialPython
+      Futhark.CodeGen.Backends.SequentialWASM
       Futhark.CodeGen.Backends.SimpleRep
       Futhark.CodeGen.ImpCode
       Futhark.CodeGen.ImpCode.GPU

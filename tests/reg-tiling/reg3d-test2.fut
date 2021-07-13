@@ -14,7 +14,7 @@
 --   ]
 -- }
 --
--- no_python compiled random input { [16][512]f32 [512][16]f32 [65536][512]f32 } auto output
+-- no_python no_wasm compiled random input { [16][512]f32 [512][16]f32 [65536][512]f32 } auto output
 
 let pred (x : f32) : bool = x < 9.0
 

@@ -10,6 +10,8 @@ module Futhark.CodeGen.Backends.MulticoreC
     GC.asLibrary,
     GC.asExecutable,
     GC.asServer,
+    operations,
+    cliOptions,
   )
 where
 

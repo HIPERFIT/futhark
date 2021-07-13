@@ -1,6 +1,6 @@
 -- Stripped version of nw from futhark-benchmarks
 -- ==
--- compiled input @ data/tiny.in
+-- no_wasm compiled input @ data/tiny.in
 -- output @ data/tiny.out
 
 let B0: i64 = 64

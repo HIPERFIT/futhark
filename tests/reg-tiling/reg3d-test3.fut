@@ -13,7 +13,7 @@
 --   [[[28.0f32, 40.0f32], [42.0f32, 58.0f32]], [[39.0f32, 32.0f32], [48.0f32, 42.0f32]]]
 -- }
 --
--- no_python compiled random input { [16][512]f32 [512][16]f32 [65536][512]f32 } auto output
+-- no_python no_wasm compiled random input { [16][512]f32 [512][16]f32 [65536][512]f32 } auto output
 
 let pred (x : f32) : bool = x < 9.0
 

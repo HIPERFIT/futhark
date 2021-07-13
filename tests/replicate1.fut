@@ -2,7 +2,7 @@
 -- one sums the resulting array, to check very large ones.
 -- ==
 -- input { 20i64 } output { 3810 }
--- compiled no_python input { 2000i64 } output { -296967286i32 }
+-- compiled no_python no_wasm input { 2000i64 } output { -296967286i32 }
 -- structure distributed { Replicate 1 }
 let main(n: i64): i32 =
   let x  = iota n

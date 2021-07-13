@@ -457,11 +457,25 @@ $esc:("#else")
      typename uint64_t bb = b;
      return (aa * bb) >> 32;
     }
-   static typename uint64_t $id:(funName' "mul_hi64") (typename uint64_t a, typename uint64_t b) {
-     typename __uint128_t aa = a;
-     typename __uint128_t bb = b;
-     return (aa * bb) >> 64;
-    }
+   $esc:("#ifdef __EMSCRIPTEN__")
+      static typename uint64_t $id:(funName' "mul_hi64") (typename uint64_t x, typename uint64_t y) {
+        typename uint64_t a = x >> 32, b = x & 0xffffffff;
+        typename uint64_t c = y >> 32, d = y & 0xffffffff;
+        typename uint64_t ac = a * c;
+        typename uint64_t bc = b * c;
+        typename uint64_t ad = a * d;
+        typename uint64_t bd = b * d;
+        typename uint64_t mid34 = (bd >> 32) + (bc & 0xffffffff) + (ad & 0xffffffff);
+        typename uint64_t upper64 = ac + (bc >> 32) + (ad >> 32) + (mid34 >> 32);
+        return upper64;
+       }
+   $esc:("#else")
+      static typename uint64_t $id:(funName' "mul_hi64") (typename uint64_t a, typename uint64_t b) {
+        typename __uint128_t aa = a;
+        typename __uint128_t bb = b;
+        return (aa * bb) >> 64;
+       }
+   $esc:("#endif")
 $esc:("#endif")
 
 $esc:("#if defined(__OPENCL_VERSION__)")
